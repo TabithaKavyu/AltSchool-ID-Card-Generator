@@ -4,7 +4,7 @@ import { StudentData, IdTemplate } from './types';
 import { IDCard } from './components/IDCard';
 import { GeneratorForm } from './components/GeneratorForm';
 import { downloadIdCard } from './utils/download';
-import { GraduationCap, Layout, Sparkles, CreditCard, Share2, Check, Info, X, Copy, ExternalLink } from 'lucide-react';
+import { GraduationCap, Layout, Sparkles, CreditCard, Share2, Check, Info, X, Copy, ExternalLink, AlertTriangle, Github } from 'lucide-react';
 
 const App: React.FC = () => {
   // Initialize state from URL params if available, otherwise use defaults
@@ -33,6 +33,7 @@ const App: React.FC = () => {
   const [showShareModal, setShowShareModal] = useState(false);
   const [generatedLink, setGeneratedLink] = useState('');
   const [isCopied, setIsCopied] = useState(false);
+  const [isBlobUrl, setIsBlobUrl] = useState(false);
 
   const handleDownload = async () => {
     setIsGenerating(true);
@@ -44,7 +45,33 @@ const App: React.FC = () => {
   };
 
   const handleShare = () => {
-    const url = new URL(window.location.href);
+    let baseUrl = window.location.href;
+    let isBlob = false;
+
+    // Attempt to handle blob URLs common in preview environments
+    if (baseUrl.startsWith('blob:')) {
+        baseUrl = baseUrl.replace(/^blob:/, '');
+        isBlob = true;
+    }
+
+    let url: URL;
+    try {
+        url = new URL(baseUrl);
+    } catch (e) {
+        // Fallback to raw href if stripping blob failed to produce valid URL
+        url = new URL(window.location.href);
+        isBlob = true;
+    }
+
+    // Check if we are on a known production environment (like github.io) to avoid showing the warning
+    if (url.hostname.includes('github.io') || url.hostname.includes('vercel.app')) {
+        isBlob = false;
+    } else if (baseUrl.startsWith('blob:')) {
+        isBlob = true;
+    }
+
+    setIsBlobUrl(isBlob);
+    
     // Clear PII/State specific params just in case, rebuild from current config
     url.search = '';
     
@@ -191,8 +218,13 @@ const App: React.FC = () => {
       </main>
 
       <footer className="bg-white border-t border-slate-200 py-6 mt-auto">
-        <div className="max-w-6xl mx-auto px-4 text-center text-slate-500 text-sm">
+        <div className="max-w-6xl mx-auto px-4 flex flex-col items-center text-slate-500 text-sm space-y-2">
             <p>© {new Date().getFullYear()} AltSchool ID Generator. Not officially affiliated with AltSchool Africa management.</p>
+            <div className="flex items-center space-x-4">
+               <a href="#" className="hover:text-alt-blue flex items-center gap-1 transition-colors">
+                  <Github className="w-4 h-4" /> Open Source
+               </a>
+            </div>
         </div>
       </footer>
 
@@ -216,6 +248,16 @@ const App: React.FC = () => {
                     <span className="font-semibold text-slate-800"> {studentData.cohort}</span> cohort, and expiry date.
                 </p>
                 
+                {isBlobUrl && (
+                  <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex gap-2">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                    <div className="text-xs text-amber-800">
+                      <p className="font-bold">Preview Environment Detected</p>
+                      <p>You are viewing this in a temporary preview. Deploy this app to GitHub Pages to generate valid shareable links.</p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="relative mb-6">
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg p-1 pr-1 focus-within:ring-2 focus-within:ring-alt-blue focus-within:border-transparent transition-all">
                         <div className="pl-3 py-2 flex-1 overflow-hidden">
@@ -252,7 +294,17 @@ const App: React.FC = () => {
                         href={generatedLink} 
                         target="_blank" 
                         rel="noreferrer" 
-                        className="px-5 py-2.5 bg-alt-blue text-white font-medium text-sm rounded-lg hover:bg-blue-700 shadow-md hover:shadow-lg transition-all flex items-center"
+                        className={`px-5 py-2.5 font-medium text-sm rounded-lg shadow-md transition-all flex items-center ${
+                          isBlobUrl 
+                            ? 'bg-slate-300 text-slate-600 cursor-not-allowed' 
+                            : 'bg-alt-blue text-white hover:bg-blue-700 hover:shadow-lg'
+                        }`}
+                        onClick={(e) => {
+                          if (isBlobUrl) {
+                            e.preventDefault();
+                            alert("This link cannot be tested in preview mode because it is a local Blob URL. Deploy the app to test sharing.");
+                          }
+                        }}
                     >
                         Test Link <ExternalLink className="w-4 h-4 ml-2" />
                     </a>
